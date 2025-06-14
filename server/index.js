@@ -9,8 +9,9 @@ import chatRoomRoutes from "./routes/chatRoom.js";
 import chatMessageRoutes from "./routes/chatMessage.js";
 import userRoutes from "./routes/user.js";
 
-const app = express();
+import ChatMessage from "./models/ChatMessage.js";
 
+const app = express();
 dotenv.config();
 
 app.use(cors());
@@ -31,7 +32,7 @@ const server = app.listen(PORT, () => {
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "https://chat-app1-vert.vercel.app/",  // Change this to your frontend URL on Render/Vercel
     credentials: true,
   },
 });
@@ -51,21 +52,36 @@ io.on("connection", (socket) => {
 
   socket.on("addUser", (userId) => {
     onlineUsers.set(userId, socket.id);
-    io.emit("getUsers", Array.from(onlineUsers)); 
+    io.emit("getUsers", Array.from(onlineUsers));
   });
 
-  socket.on("sendMessage", ({ senderId, receiverId, message }) => {
-    const sendUserSocket = onlineUsers.get(receiverId);
-    if (sendUserSocket) {
-      socket.to(sendUserSocket).emit("getMessage", {
-        senderId,
-        message,
+  socket.on("sendMessage", async ({ chatRoomId, senderId, receiverId, message }) => {
+    try {
+      // Save to DB
+      const newMessage = new ChatMessage({
+        chatRoomId,
+        sender: senderId,
+        message
       });
+      await newMessage.save();
+
+      // Emit to receiver if online
+      const sendUserSocket = onlineUsers.get(receiverId);
+      if (sendUserSocket) {
+        socket.to(sendUserSocket).emit("getMessage", {
+          chatRoomId,
+          senderId,
+          message,
+        });
+      }
+
+    } catch (err) {
+      console.error("Error saving message:", err);
     }
   });
 
   socket.on("disconnect", () => {
     onlineUsers.delete(getKey(onlineUsers, socket.id));
-    io.emit("getUsers", Array.from(onlineUsers)); 
+    io.emit("getUsers", Array.from(onlineUsers));
   });
 });
