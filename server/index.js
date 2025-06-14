@@ -9,12 +9,13 @@ import chatRoomRoutes from "./routes/chatRoom.js";
 import chatMessageRoutes from "./routes/chatMessage.js";
 import userRoutes from "./routes/user.js";
 
-import ChatMessage from "./models/ChatMessage.js";
-
-const app = express();
 dotenv.config();
+const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: "https://chat-app1-vert.vercel.app/",  // 🔑 Replace with your actual Vercel frontend URL
+  credentials: true,
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -32,7 +33,7 @@ const server = app.listen(PORT, () => {
 
 const io = new Server(server, {
   cors: {
-    origin: "https://chat-app1-vert.vercel.app/",  // Change this to your frontend URL on Render/Vercel
+    origin: "https://chat-app1-vert.vercel.app/",  // 🔑 Vercel URL
     credentials: true,
   },
 });
@@ -55,28 +56,21 @@ io.on("connection", (socket) => {
     io.emit("getUsers", Array.from(onlineUsers));
   });
 
-  socket.on("sendMessage", async ({ chatRoomId, senderId, receiverId, message }) => {
+  socket.on("sendMessage", async ({ senderId, receiverId, message, chatRoomId }) => {
+    // ✅ Save to DB
     try {
-      // Save to DB
-      const newMessage = new ChatMessage({
-        chatRoomId,
-        sender: senderId,
-        message
-      });
-      await newMessage.save();
-
-      // Emit to receiver if online
-      const sendUserSocket = onlineUsers.get(receiverId);
-      if (sendUserSocket) {
-        socket.to(sendUserSocket).emit("getMessage", {
-          chatRoomId,
-          senderId,
-          message,
-        });
-      }
-
+      const ChatMessage = (await import('./models/ChatMessage.js')).default;
+      await ChatMessage.create({ chatRoomId, sender: senderId, message });
     } catch (err) {
-      console.error("Error saving message:", err);
+      console.error("DB save failed", err);
+    }
+
+    const sendUserSocket = onlineUsers.get(receiverId);
+    if (sendUserSocket) {
+      socket.to(sendUserSocket).emit("getMessage", {
+        senderId,
+        message,
+      });
     }
   });
 
