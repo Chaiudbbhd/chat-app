@@ -4,6 +4,7 @@ import {
   signInWithEmailAndPassword,
   signOut,
   updateProfile,
+  onAuthStateChanged
 } from "firebase/auth";
 
 import auth from "../config/firebase";
@@ -15,32 +16,67 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState();
+  const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  function register(email, password) {
-    return createUserWithEmailAndPassword(auth, email, password);
+  // Register
+  async function register(email, password) {
+    setError("");
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      setCurrentUser(userCredential.user);
+      return userCredential.user;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
   }
 
-  function login(email, password) {
-    return signInWithEmailAndPassword(auth, email, password);
+  // Login
+  async function login(email, password) {
+    setError("");
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      setCurrentUser(userCredential.user);
+      return userCredential.user;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
   }
 
-  function logout() {
-    return signOut(auth);
+  // Logout
+  async function logout() {
+    setError("");
+    try {
+      await signOut(auth);
+      setCurrentUser(null);
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
   }
 
-  function updateUserProfile(user, profile) {
-    return updateProfile(user, profile);
+  // Update user profile
+  async function updateUserProfile(profile) {
+    if (!auth.currentUser) return;
+    setError("");
+    try {
+      await updateProfile(auth.currentUser, profile);
+      setCurrentUser({ ...auth.currentUser }); // update local state
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
   }
 
+  // Listen for auth changes
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setLoading(false);
     });
-
     return unsubscribe;
   }, []);
 
@@ -48,10 +84,10 @@ export function AuthProvider({ children }) {
     currentUser,
     error,
     setError,
-    login,
     register,
+    login,
     logout,
-    updateUserProfile,
+    updateUserProfile
   };
 
   return (
