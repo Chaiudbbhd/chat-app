@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../contexts/AuthContext";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -8,14 +7,43 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-
-  const { currentUser, register, error, setError } = useAuth();
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (currentUser) {
+    const token = localStorage.getItem("token");
+    if (token) {
       navigate("/profile");
     }
-  }, [currentUser, navigate]);
+  }, [navigate]);
+
+  async function register(email, password) {
+    setError("");
+    try {
+      const res = await fetch(
+        "https://chat-app-1-euxt.onrender.com/",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        }
+      );
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.message || "Registration failed");
+      }
+
+      const data = await res.json();
+      // Save token if your backend returns it
+      if (data.token) {
+        localStorage.setItem("token", data.token);
+      }
+      return data;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }
 
   async function handleFormSubmit(e) {
     e.preventDefault();
@@ -25,14 +53,12 @@ export default function Register() {
       return;
     }
 
+    setLoading(true);
     try {
-      setError("");
-      setLoading(true);
       await register(email, password);
       navigate("/profile");
     } catch (e) {
       console.error(e);
-      // error already set in context
     } finally {
       setLoading(false);
     }
